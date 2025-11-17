@@ -1,0 +1,56 @@
+# Azure AI Foundry Configuration
+# This file contains configuration for Azure AI services
+
+azure:
+  # Azure AI Foundry endpoint
+  # Set via environment variable: AZURE_AI_ENDPOINT
+  endpoint: ${AZURE_AI_ENDPOINT}
+
+  # Azure API key
+  # Set via environment variable: AZURE_AI_API_KEY
+  api_key: ${AZURE_AI_API_KEY}
+
+  # Azure subscription ID (optional)
+  subscription_id: ${AZURE_SUBSCRIPTION_ID}
+
+  # Azure resource group (optional)
+  resource_group: ${AZURE_RESOURCE_GROUP}
+
+# Agent configuration
+agent:
+  # Enable Copilot Studio integration
+  enable_copilot_studio: true
+
+  # LLM model for evaluation
+  evaluation_model: "gpt-4"
+
+  # Evaluation criteria weights
+  evaluation_weights:
+    completeness: 0.25
+    sustainability: 0.40
+    cost_effectiveness: 0.35
+
+  # Pass/fail threshold (0-100)
+  pass_threshold: 70.0
+
+# Simulation settings
+simulation:
+  # Enable detailed logging
+  verbose: true
+
+  # Parallel execution
+  parallel_simulations: true
+
+# Output settings
+output:
+  # Default output format
+  default_format: "console"
+
+  # Save outputs to files
+  save_to_file: true
+
+  # Output directory
+  output_dir: "outputs"
+
+  # Audit trail directory
+  audit_dir: "audit_trails"

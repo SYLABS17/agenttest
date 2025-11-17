@@ -1,0 +1,31 @@
+{
+  "name": "sustainable-building-design-agent",
+  "version": "1.0.0",
+  "description": "AI agent for generating sustainable office building designs using Microsoft Agent Framework and Azure AI Foundry",
+  "main": "src/main.py",
+  "scripts": {
+    "start": "python src/main.py",
+    "test": "pytest tests/ -v --cov=src",
+    "test:unit": "pytest tests/unit/ -v",
+    "test:integration": "pytest tests/integration/ -v",
+    "lint": "pylint src/",
+    "format": "black src/ tests/"
+  },
+  "keywords": [
+    "azure-ai",
+    "agent-framework",
+    "sustainable-design",
+    "building-design",
+    "copilot-studio",
+    "ai-agents"
+  ],
+  "author": "AI Assistant",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SYLABS17/agenttest.git"
+  },
+  "engines": {
+    "python": ">=3.9"
+  }
+}
