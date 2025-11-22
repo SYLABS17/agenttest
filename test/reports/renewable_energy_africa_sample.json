@@ -1,0 +1,20 @@
+{
+  "title": "Research Brief: Future of renewable energy in Africa",
+  "summary": "Combined Bing and Azure AI Search evidence indicates that African grids are converging on hybrid solar-storage, cross-border interconnects, and community-centric finance models.",
+  "key_insights": [
+    "3GW of hybrid tenders in Kenya will push storage costs below $100/kWh by 2026.",
+    "Workforce localisation mandates are accelerating training partnerships with technical universities.",
+    "Predictive analytics on mini-grids can slash downtime by 40% in off-grid communities."
+  ],
+  "sources": [
+    "https://www.afdb.org/en/news/green-baseload",
+    "https://contosoenergy.sharepoint.com/sites/emea-renewables"
+  ],
+  "topics": [
+    "solar",
+    "storage",
+    "blended finance",
+    "workforce"
+  ],
+  "generated_at": "2025-11-22T00:00:00Z"
+}

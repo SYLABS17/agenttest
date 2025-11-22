@@ -108,3 +108,7 @@ venv.bak/
 artifacts/
 data/
 *.png
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+dist/
