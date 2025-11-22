@@ -1,0 +1,83 @@
+name: Deploy AI Research System
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+    - name: Run tests
+      run: |
+        pytest backend/test_backend.py
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+    - name: Install dependencies
+      working-directory: frontend
+      run: npm install
+    - name: Run tests
+      working-directory: frontend
+      run: npm test -- --watchAll=false
+
+  deploy-infra:
+    needs: [test-backend, test-frontend]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Deploy Resources
+      run: |
+        chmod +x scripts/deploy_resources.sh
+        ./scripts/deploy_resources.sh
+
+  deploy-app:
+    needs: deploy-infra
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+    - name: Build Frontend
+      run: |
+        chmod +x scripts/deploy_frontend.sh
+        ./scripts/deploy_frontend.sh
+    - name: Deploy Backend
+      run: |
+        chmod +x scripts/deploy_backend.sh
+        # Note: In a real scenario, we would fetch the resource group and app name from secrets or outputs
+        # For this template, we assume they are passed or retrievable
+        ./scripts/deploy_backend.sh ${{ secrets.AZURE_RESOURCE_GROUP }} ${{ secrets.AZURE_WEBAPP_NAME }}

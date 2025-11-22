@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+opencensus-ext-azure
+azure-identity
+azure-search-documents
+azure-core
+requests
+pytest
+httpx
+openai
