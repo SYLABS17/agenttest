@@ -1,0 +1,177 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "costCenter": {
+      "type": "string"
+    },
+    "workspaceSku": {
+      "type": "string",
+      "defaultValue": "PerGB2018"
+    },
+    "retentionInDays": {
+      "type": "int",
+      "defaultValue": 30
+    },
+    "applicationType": {
+      "type": "string",
+      "defaultValue": "web"
+    }
+  },
+  "variables": {
+    "tags": {
+      "env": "[parameters('environment')]",
+      "owner": "[parameters('owner')]",
+      "costCenter": "[parameters('costCenter')]"
+    },
+    "workspaceName": "[format('{0}-logs', parameters('namePrefix'))]",
+    "appInsightsName": "[format('{0}-appi', parameters('namePrefix'))]",
+    "dceName": "[format('{0}-dce', parameters('namePrefix'))]",
+    "dcrName": "[format('{0}-dcr', parameters('namePrefix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('workspaceName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('workspaceSku')]"
+      },
+      "properties": {
+        "retentionInDays": "[parameters('retentionInDays')]",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02-preview",
+      "name": "[variables('appInsightsName')]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+      ],
+      "properties": {
+        "Application_Type": "[parameters('applicationType')]",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "logsIngestion": {
+          "logAnalyticsWorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+        }
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-ObservabilityLogs": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "Level",
+                "type": "string"
+              },
+              {
+                "name": "Message",
+                "type": "string"
+              },
+              {
+                "name": "Properties",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "central-law",
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-ObservabilityLogs"
+            ],
+            "destinations": [
+              "central-law"
+            ]
+          }
+        ]
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2017-04-01",
+      "name": "[format('{0}/CanNotDelete', variables('workspaceName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+      ],
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "Prevent accidental deletion of central Log Analytics workspace."
+      }
+    }
+  ],
+  "outputs": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName'))).ConnectionString]"
+    },
+    "appInsightsInstrumentationKey": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName'))).InstrumentationKey]"
+    },
+    "dataCollectionEndpointId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+    },
+    "dataCollectionRuleId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+    }
+  }
+}

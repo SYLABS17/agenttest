@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "webAppResourceId": {
+      "type": "string"
+    },
+    "webAppHostname": {
+      "type": "string"
+    },
+    "storageAccountId": {
+      "type": "string"
+    },
+    "virtualNetworkId": {
+      "type": "string"
+    },
+    "searchServiceResourceId": {
+      "type": "string"
+    },
+    "searchServiceEndpoint": {
+      "type": "string"
+    },
+    "openAiResourceId": {
+      "type": "string"
+    },
+    "languageResourceId": {
+      "type": "string"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string"
+    },
+    "appInsightsConnectionString": {
+      "type": "string"
+    },
+    "dataCollectionEndpointId": {
+      "type": "string"
+    },
+    "dataCollectionRuleId": {
+      "type": "string"
+    }
+  },
+  "resources": [],
+  "outputs": {
+    "appService": {
+      "type": "object",
+      "value": {
+        "resourceId": "[parameters('webAppResourceId')]",
+        "hostname": "[parameters('webAppHostname')]",
+        "storageAccountId": "[parameters('storageAccountId')]",
+        "virtualNetworkId": "[parameters('virtualNetworkId')]"
+      }
+    },
+    "cognitive": {
+      "type": "object",
+      "value": {
+        "searchServiceResourceId": "[parameters('searchServiceResourceId')]",
+        "searchServiceEndpoint": "[parameters('searchServiceEndpoint')]",
+        "openAiResourceId": "[parameters('openAiResourceId')]",
+        "languageResourceId": "[parameters('languageResourceId')]"
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "value": {
+        "logAnalyticsWorkspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "appInsightsConnectionString": "[parameters('appInsightsConnectionString')]",
+        "dataCollectionEndpointId": "[parameters('dataCollectionEndpointId')]",
+        "dataCollectionRuleId": "[parameters('dataCollectionRuleId')]"
+      }
+    }
+  }
+}

@@ -1,0 +1,403 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Short prefix applied to all resource names (e.g. airesearch)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev",
+        "test",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Deployment environment tag."
+      }
+    },
+    "owner": {
+      "type": "string",
+      "metadata": {
+        "description": "Primary owner contact email."
+      }
+    },
+    "costCenter": {
+      "type": "string",
+      "metadata": {
+        "description": "Cost center tag for chargeback."
+      }
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "P1v3",
+      "metadata": {
+        "description": "App Service plan SKU (e.g. P1v3)."
+      }
+    },
+    "webAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the App Service Web App."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Globally unique storage account name."
+      }
+    },
+    "storageReplication": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_ZRS",
+        "Standard_GRS",
+        "Standard_GZRS"
+      ],
+      "metadata": {
+        "description": "Storage redundancy level."
+      }
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the central Log Analytics workspace used for diagnostics."
+      }
+    },
+    "appInsightsConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Application Insights connection string for backend telemetry."
+      }
+    },
+    "vnetAddressPrefix": {
+      "type": "string",
+      "defaultValue": "10.20.0.0/16"
+    },
+    "appSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.20.1.0/24"
+    },
+    "privateEndpointSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.20.2.0/27"
+    }
+  },
+  "variables": {
+    "tags": {
+      "env": "[parameters('environment')]",
+      "owner": "[parameters('owner')]",
+      "costCenter": "[parameters('costCenter')]"
+    },
+    "appServicePlanName": "[format('{0}-asp', parameters('namePrefix'))]",
+    "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+    "vnetName": "[format('{0}-vnet', parameters('namePrefix'))]",
+    "appSubnetName": "app-subnet",
+    "privateEndpointSubnetName": "pe-subnet",
+    "nsgName": "[format('{0}-app-nsg', parameters('namePrefix'))]",
+    "privateDnsZoneName": "privatelink.azurewebsites.net",
+    "privateEndpointName": "[format('{0}-web-pe', parameters('namePrefix'))]",
+    "diagnosticSettingName": "[format('{0}-web-diag', parameters('namePrefix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('storageReplication')]"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('nsgName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowAppServiceManagement",
+            "properties": {
+              "priority": 100,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "AppServiceManagement",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "DenyInternetInbound",
+            "properties": {
+              "priority": 200,
+              "access": "Deny",
+              "direction": "Inbound",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetAddressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('appSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('appSubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('privateEndpointSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('appServicePlanSku')]",
+        "tier": "PremiumV3"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true,
+        "zoneRedundant": "[equals(parameters('environment'), 'prod')]"
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('webAppName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "PYTHON|3.11",
+          "alwaysOn": true,
+          "appSettings": [
+            {
+              "name": "APPINSIGHTS_CONNECTION_STRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "AZURE_STORAGE_ACCOUNT",
+              "value": "[parameters('storageAccountName')]"
+            }
+          ]
+        }
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[variables('diagnosticSettingName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "logs": [
+          {
+            "category": "AppServiceHTTPLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceConsoleLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceAppLogs",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('privateDnsZoneName')]",
+      "location": "global",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}-link', variables('privateDnsZoneName'), variables('vnetName'))]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('privateEndpointName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('privateEndpointSubnetName'))]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "webappConnection",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]",
+              "groupIds": [
+                "sites"
+              ]
+            }
+          }
+        ]
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/webappZoneGroup', variables('privateEndpointName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "webappDnsConfig",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('privateDnsZoneName'))]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2017-04-01",
+      "name": "[format('{0}/CanNotDelete', variables('appServicePlanName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ],
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "Protect App Service plan from accidental deletion."
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2017-04-01",
+      "name": "[format('{0}/ReadOnly', parameters('webAppName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+      ],
+      "properties": {
+        "level": "ReadOnly",
+        "notes": "Lock web app for drift control; remove during maintenance."
+      }
+    }
+  ],
+  "outputs": {
+    "webAppHostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/sites', parameters('webAppName'))).defaultHostName]"
+    },
+    "webAppResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+    },
+    "storageAccountId": {
+      "type": "string",
+      "value": "[variables('storageAccountId')]"
+    },
+    "virtualNetworkId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+    },
+    "privateEndpointIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', variables('privateEndpointName'))).properties.customDnsConfigs[0].ipAddresses[0]]"
+    }
+  }
+}

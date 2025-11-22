@@ -1,113 +1,116 @@
-# Multi-Agent Salary Analysis System
+# Azure AI Research System
 
-This project is a production-ready, multi-agent salary analysis system built in Python using LangGraph. It demonstrates a collaborative pipeline of three agents that ingest, analyze, and evaluate employee salary data. The system is designed with full observability using LangSmith and OpenTelemetry and features an LLM-as-a-judge for evaluating the analysis quality.
+This repository provisions and deploys an Azure-hosted, multi-agent research assistant. A Manager Agent coordinates two worker agents (Bing Search + Azure AI Search) to answer research questions, aggregate findings in a group-chat format, and produce a final report. The project ships with end-to-end infrastructure as code, a FastAPI backend, a Tailwind-powered React frontend, observability plumbing, and deployment scripts suitable for Azure DevOps/GitHub Actions.
 
-## Features
-
-- **Multi-Agent Collaboration**: A `StateGraph` manages the workflow between three distinct agents:
-    1.  **Data & Schema Agent**: Ingests, cleans, and profiles the dataset.
-    2.  **Analysis & Modeling Agent**: Performs EDA, generates visualizations, and trains a simple predictive model.
-    3.  **Judge & Evaluation Agent**: Uses an "LLM-as-a-judge" to score the analysis based on a predefined rubric.
-- **Full Observability**: End-to-end tracing is configured with LangSmith and OpenTelemetry, providing deep insights into agent performance, latency, and costs.
-- **LLM-as-a-Judge**: A robust evaluation pipeline scores the generated analysis on criteria like correctness, clarity, fairness, and actionability.
-- **Modern Python Stack**: Built with Python 3.11+, LangGraph, Pydantic, and Typer for a clean, typed, and efficient developer experience.
-- **Reproducible Environment**: Dependencies are managed with Poetry in `pyproject.toml`.
-
-## Project Structure
+## Repository Layout
 
 ```
-.
-├── artifacts/              # Output directory for plots and graph visualizations
-├── data/
-│   └── employee_salary_analysis.csv # Sample dataset
-├── src/
-│   ├── agents/             # Logic for each of the three agents
-│   ├── evaluation/         # Judge prompt and evaluation logic
-│   ├── graph/              # LangGraph state and builder
-│   ├── observability/      # OpenTelemetry and LangSmith setup
-│   ├── cli.py              # Typer CLI entrypoint
-│   └── config.py           # Pydantic settings management
-├── tests/                  # Pytest tests for agents and graph
-├── .env.example            # Example environment file
-├── pyproject.toml          # Project dependencies
-└── README.md
+infra/                # ARM templates for App Service, Cognitive Search/OpenAI, Azure Monitor
+backend/              # FastAPI service, agent orchestration, observability + tests
+frontend/             # React + Tailwind single-page app with testing setup
+scripts/              # Deployment & validation scripts
+test/data|reports/    # Dummy fixtures + generated sample research reports
+.env.template         # Environment variables to copy into .env
 ```
 
-## Setup and Installation
+Legacy LangGraph samples remain under `src/` for reference but are not used by the new system.
 
-### Prerequisites
+## Infrastructure as Code (ARM)
 
-- Python 3.11+
-- [Poetry](https://python-poetry.org/docs/#installation) for dependency management.
+All templates are parameterized, tagged, and private-network ready:
 
-### Installation Steps
+| Template | Purpose |
+| --- | --- |
+| `infra/monitor.json` | Creates Log Analytics workspace, Application Insights, Data Collection Endpoint/Rule, and resource locks. |
+| `infra/app_service.json` | Provisions Storage Account, Azure App Service Plan, Linux Web App, VNet + NSG, private endpoint, and diagnostics. |
+| `infra/cognitive_search.json` | Deploys Azure Cognitive Search, Azure OpenAI, Azure Language Service, diagnostic settings, and private endpoints. |
+| `infra/outputs.json` | Aggregates outputs from the module deployments for downstream automation. |
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd multi-agent-salary-analysis
-    ```
+Deployment helper: `scripts/deploy_resources.sh <rg> <location> <name-prefix> <owner-email> [env] [cost-center]`
 
-2.  **Install dependencies using Poetry:**
-    ```bash
-    poetry install
-    ```
-    This will create a virtual environment and install all necessary packages from `pyproject.toml`.
+## Backend (FastAPI)
 
-## Configuration
+Located in `backend/`:
 
-The application uses a `.env` file for managing secrets and configuration.
+- `main.py`: FastAPI app exposing `/healthz`, `/api/research`, and `/api/logs`.
+- Agents (`backend/agents/*`):
+  - `ManagerAgent`: coordinates worker agents, builds chat transcript, merges final report, and triggers evaluations.
+  - `BingSearchAgent` & `AISearchAgent`: simulate grounded searches using fixtures in `test/data`.
+- Services:
+  - `observability.py`: OpenCensus tracer + JSON logging to Azure Application Insights and rotating files.
+  - `evaluator.py`: Dummy scoring engine that logs metrics to Azure Monitor.
+- Config via `backend/config.py` (Pydantic). Copy `.env.template` → `.env` for local development.
+- Tests live in `backend/tests/` (pytest + pytest-asyncio).
 
-1.  **Create a `.env` file** by copying the example file:
-    ```bash
-    cp .env.example .env
-    ```
+Run locally:
 
-2.  **Edit the `.env` file** and add your API keys:
-    ```
-    # --- LLM Provider ---
-    # Used by the Analysis and Judge agents
-    OPENAI_API_KEY="sk-..."
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload
+```
 
-    # --- LangSmith (Optional but Recommended) ---
-    # Enables end-to-end tracing and observability
-    LANGSMITH_API_KEY="ls__..."
-    LANGSMITH_PROJECT="multi-agent-salary-analysis"
-    ```
+## Frontend (React + Tailwind)
 
-## Usage
+Under `frontend/`:
 
-The primary way to run the analysis pipeline is through the CLI.
+- Vite + TypeScript setup with Tailwind and React Testing Library.
+- `src/App.tsx` renders chat UI, report viewer, observability panel, and dark-mode toggle.
+- Components in `src/components/` with ARIA labels + responsive design.
+- Tests in `frontend/__tests__/App.test.tsx` (Vitest).
 
-1.  **Activate the Poetry virtual environment:**
-    ```bash
-    poetry shell
-    ```
+Dev loop:
 
-2.  **Run the analysis pipeline:**
-    ```bash
-    python src/cli.py run
-    ```
-    This will execute the full pipeline using the default dataset path (`data/employee_salary_analysis.csv`) and print the final report and evaluation scores to the console.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-3.  **Run with a custom data file:**
-    You can specify a different data file using the `--data-path` option.
-    ```bash
-    python src/cli.py run --data-path /path/to/your/data.csv
-    ```
+Point `VITE_API_BASE_URL` to the backend URL (local or Azure) via `.env` or environment variable.
 
-## Running Tests
+## Testing & Validation
 
-The project includes a suite of tests to ensure the core components work as expected.
+- Backend: `pytest backend/tests`
+- Frontend: `cd frontend && npm run test`
+- Combined workflow: `scripts/validate_end_to_end.sh` (creates temporary venv, runs pytest + vitest, and prints observability log tail).
 
-1.  **Activate the Poetry virtual environment:**
-    ```bash
-    poetry shell
-    ```
+## Deployment Scripts
 
-2.  **Run the tests using pytest:**
-    ```bash
-    pytest
-    ```
+| Script | Description |
+| --- | --- |
+| `deploy_resources.sh` | Validates & deploys all ARM templates with `az deployment group what-if/create`. |
+| `deploy_backend.sh <web-app> <rg>` | Zips the FastAPI backend and pushes via `az webapp deploy`. |
+| `deploy_frontend.sh <storage-account> <container>` | Builds the React app and uploads static assets to Azure Storage. |
+| `validate_end_to_end.sh` | Runs backend/frontend tests and outputs recent logs. |
 
-This will discover and run all tests in the `tests/` directory. The tests include a smoke test that runs the full graph (with mocked LLM calls) and basic unit tests for individual agents.
+All scripts use `--only-show-errors` and assume the executing identity has contributor access to the target resource group/storage account.
+
+## Observability
+
+- OpenCensus traces/logs flow to Application Insights (connection string via `.env`).
+- Diagnostic settings for App Service, Storage, Cognitive Search, and Azure OpenAI send telemetry to Log Analytics.
+- Frontend displays current evaluation metrics plus the latest log entries fetched from `/api/logs`.
+
+## Dummy Data & Reports
+
+Sample agent responses live in:
+
+- `test/data/bing_results.json`
+- `test/data/ai_search_results.json`
+
+Generated Markdown reports are saved automatically to `test/reports/` for auditing.
+
+## CI/CD (Ready for GitHub Actions)
+
+- Backend + frontend rely on standard toolchains (pip/pytest + npm/vitest).
+- ARM templates include descriptive outputs for pipeline chaining (see `infra/outputs.json`).
+- Add workflow jobs to run `scripts/deploy_resources.sh`, `deploy_backend.sh`, and `deploy_frontend.sh` as needed.
+
+## Next Steps
+
+- Wire Azure Key Vault + managed identity for secret retrieval.
+- Expand worker agents with real Bing/Azure AI Search clients once keys are provided.
+- Add GitHub Actions workflow (see `.github/workflows/deploy.yml` placeholder mention).
+
+For additional details on coding standards and contribution workflow, review `CLAUDE.md`.
