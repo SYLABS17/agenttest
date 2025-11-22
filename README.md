@@ -1,113 +1,393 @@
-# Multi-Agent Salary Analysis System
+# AI Research System - Azure Multi-Agent Orchestration Platform
 
-This project is a production-ready, multi-agent salary analysis system built in Python using LangGraph. It demonstrates a collaborative pipeline of three agents that ingest, analyze, and evaluate employee salary data. The system is designed with full observability using LangSmith and OpenTelemetry and features an LLM-as-a-judge for evaluating the analysis quality.
+A comprehensive, production-ready AI research system built on Azure that orchestrates multiple AI agents to conduct intelligent research, providing detailed reports with analysis, insights, and recommendations.
 
-## Features
+![Architecture](https://img.shields.io/badge/Architecture-Microservices-blue)
+![Backend](https://img.shields.io/badge/Backend-FastAPI-green)
+![Frontend](https://img.shields.io/badge/Frontend-React-blue)
+![Cloud](https://img.shields.io/badge/Cloud-Azure-blue)
+![AI](https://img.shields.io/badge/AI-Multi--Agent-purple)
 
-- **Multi-Agent Collaboration**: A `StateGraph` manages the workflow between three distinct agents:
-    1.  **Data & Schema Agent**: Ingests, cleans, and profiles the dataset.
-    2.  **Analysis & Modeling Agent**: Performs EDA, generates visualizations, and trains a simple predictive model.
-    3.  **Judge & Evaluation Agent**: Uses an "LLM-as-a-judge" to score the analysis based on a predefined rubric.
-- **Full Observability**: End-to-end tracing is configured with LangSmith and OpenTelemetry, providing deep insights into agent performance, latency, and costs.
-- **LLM-as-a-Judge**: A robust evaluation pipeline scores the generated analysis on criteria like correctness, clarity, fairness, and actionability.
-- **Modern Python Stack**: Built with Python 3.11+, LangGraph, Pydantic, and Typer for a clean, typed, and efficient developer experience.
-- **Reproducible Environment**: Dependencies are managed with Poetry in `pyproject.toml`.
+## 🌟 Features
 
-## Project Structure
+- **Multi-Agent Orchestration**: Manager agent coordinates Bing Search and Azure AI Search agents
+- **Group Chat Collaboration**: Agents work together in a conversational style
+- **Comprehensive Research Reports**: Detailed analysis with sources and recommendations
+- **Real-time Observability**: Azure Monitor and Application Insights integration
+- **Performance Evaluation**: Built-in agent performance scoring and metrics
+- **Modern UI**: React with Tailwind CSS, dark mode, and responsive design
+- **Production Ready**: Full CI/CD pipeline, testing, and deployment automation
+
+## 🏗️ Architecture
 
 ```
-.
-├── artifacts/              # Output directory for plots and graph visualizations
-├── data/
-│   └── employee_salary_analysis.csv # Sample dataset
-├── src/
-│   ├── agents/             # Logic for each of the three agents
-│   ├── evaluation/         # Judge prompt and evaluation logic
-│   ├── graph/              # LangGraph state and builder
-│   ├── observability/      # OpenTelemetry and LangSmith setup
-│   ├── cli.py              # Typer CLI entrypoint
-│   └── config.py           # Pydantic settings management
-├── tests/                  # Pytest tests for agents and graph
-├── .env.example            # Example environment file
-├── pyproject.toml          # Project dependencies
-└── README.md
+┌─────────────────────────────────────────────────────────┐
+│                     Azure Cloud                          │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────┐    ┌──────────────┐   ┌────────────┐ │
+│  │ React       │───▶│ FastAPI      │──▶│ Manager    │ │
+│  │ Frontend    │    │ Backend      │   │ Agent      │ │
+│  └──────────────┘    └──────────────┘   └─────┬──────┘ │
+│                                                │        │
+│                                      ┌─────────┴────┐   │
+│                                      ▼              ▼   │
+│                              ┌──────────────┐ ┌──────────────┐
+│                              │ Bing Search  │ │ AI Search    │
+│                              │ Agent        │ │ Agent        │
+│                              └──────────────┘ └──────────────┘
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │           Azure Services                         │  │
+│  ├──────────────────────────────────────────────────┤  │
+│  │ • App Service      • Cognitive Search            │  │
+│  │ • Storage Account  • OpenAI Service              │  │
+│  │ • Monitor         • Application Insights         │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Setup and Installation
+## 🚀 Quick Start
 
 ### Prerequisites
 
+- Azure Subscription
+- Azure CLI installed
+- Node.js 18+ and npm
 - Python 3.11+
-- [Poetry](https://python-poetry.org/docs/#installation) for dependency management.
+- Git
 
-### Installation Steps
+### 1. Clone the Repository
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd multi-agent-salary-analysis
-    ```
+```bash
+git clone https://github.com/your-org/ai-research-system.git
+cd ai-research-system
+```
 
-2.  **Install dependencies using Poetry:**
-    ```bash
-    poetry install
-    ```
-    This will create a virtual environment and install all necessary packages from `pyproject.toml`.
+### 2. Configure Environment
 
-## Configuration
+```bash
+cp .env.template .env
+# Edit .env with your Azure credentials and configuration
+```
 
-The application uses a `.env` file for managing secrets and configuration.
+### 3. Deploy to Azure
 
-1.  **Create a `.env` file** by copying the example file:
-    ```bash
-    cp .env.example .env
-    ```
+```bash
+# Deploy Azure infrastructure
+./scripts/deploy_resources.sh
 
-2.  **Edit the `.env` file** and add your API keys:
-    ```
-    # --- LLM Provider ---
-    # Used by the Analysis and Judge agents
-    OPENAI_API_KEY="sk-..."
+# Deploy backend
+./scripts/deploy_backend.sh
 
-    # --- LangSmith (Optional but Recommended) ---
-    # Enables end-to-end tracing and observability
-    LANGSMITH_API_KEY="ls__..."
-    LANGSMITH_PROJECT="multi-agent-salary-analysis"
-    ```
+# Deploy frontend
+./scripts/deploy_frontend.sh
 
-## Usage
+# Validate deployment
+./scripts/validate_end_to_end.sh
+```
 
-The primary way to run the analysis pipeline is through the CLI.
+### 4. Local Development
 
-1.  **Activate the Poetry virtual environment:**
-    ```bash
-    poetry shell
-    ```
+#### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
 
-2.  **Run the analysis pipeline:**
-    ```bash
-    python src/cli.py run
-    ```
-    This will execute the full pipeline using the default dataset path (`data/employee_salary_analysis.csv`) and print the final report and evaluation scores to the console.
+#### Frontend
+```bash
+cd frontend
+npm install
+npm start
+```
 
-3.  **Run with a custom data file:**
-    You can specify a different data file using the `--data-path` option.
-    ```bash
-    python src/cli.py run --data-path /path/to/your/data.csv
-    ```
+## 📁 Project Structure
 
-## Running Tests
+```
+ai-research-system/
+├── infra/                      # Azure Infrastructure (ARM/Bicep)
+│   ├── main.bicep             # Main infrastructure template
+│   ├── resources.bicep        # Resource definitions
+│   └── parameters.json        # Deployment parameters
+│
+├── backend/                    # Python FastAPI Backend
+│   ├── agents/                # AI Agent implementations
+│   │   ├── base_agent.py     # Base agent class
+│   │   ├── manager_agent.py  # Manager orchestrator
+│   │   ├── bing_agent.py     # Bing search agent
+│   │   └── ai_search_agent.py # Azure AI search agent
+│   ├── services/              # Backend services
+│   │   ├── observability.py  # Monitoring service
+│   │   └── evaluator.py      # Agent evaluation
+│   ├── tests/                 # Backend tests
+│   ├── main.py               # FastAPI application
+│   └── requirements.txt      # Python dependencies
+│
+├── frontend/                   # React Frontend
+│   ├── src/
+│   │   ├── components/       # React components
+│   │   ├── stores/          # State management
+│   │   ├── services/        # API services
+│   │   └── App.tsx          # Main application
+│   ├── public/
+│   └── package.json
+│
+├── test/                      # Test data and utilities
+│   ├── data/                 # Mock data
+│   └── reports/             # Test reports
+│
+├── scripts/                   # Deployment scripts
+│   ├── deploy_resources.sh  # Deploy Azure resources
+│   ├── deploy_backend.sh    # Deploy backend
+│   ├── deploy_frontend.sh   # Deploy frontend
+│   └── validate_end_to_end.sh # E2E validation
+│
+├── .github/
+│   └── workflows/
+│       └── deploy.yml        # CI/CD pipeline
+│
+└── README.md                 # This file
+```
 
-The project includes a suite of tests to ensure the core components work as expected.
+## 🔧 Configuration
 
-1.  **Activate the Poetry virtual environment:**
-    ```bash
-    poetry shell
-    ```
+### Environment Variables
 
-2.  **Run the tests using pytest:**
-    ```bash
-    pytest
-    ```
+Create a `.env` file based on `.env.template`:
 
-This will discover and run all tests in the `tests/` directory. The tests include a smoke test that runs the full graph (with mocked LLM calls) and basic unit tests for individual agents.
+```env
+# Azure Configuration
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_RESOURCE_GROUP=ai-research-rg
+AZURE_LOCATION=eastus
+
+# Azure OpenAI
+AZURE_OPENAI_ENDPOINT=https://your-openai.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4
+
+# Azure Cognitive Search
+AZURE_SEARCH_ENDPOINT=https://your-search.search.windows.net
+AZURE_SEARCH_API_KEY=your-search-key
+
+# Application Settings
+APP_ENV=development
+APP_DEBUG=true
+```
+
+### Azure Resources Configuration
+
+The infrastructure is defined in Bicep templates with parameterized values:
+
+- **App Service Plan**: Configurable SKU (default: P1V2)
+- **Storage Account**: Configurable redundancy (default: LRS)
+- **Cognitive Search**: Configurable tier (default: Standard)
+- **Monitoring**: Application Insights and Log Analytics
+- **Security**: Managed Identity, Key Vault, Private Endpoints (optional)
+
+## 🧪 Testing
+
+### Backend Tests
+```bash
+cd backend
+pytest tests/ --cov=. --cov-report=html
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm test
+npm run test:coverage
+```
+
+### End-to-End Tests
+```bash
+./scripts/validate_end_to_end.sh
+```
+
+## 📊 Observability
+
+### Metrics & Monitoring
+
+- **Application Insights**: Application performance monitoring
+- **Azure Monitor**: Infrastructure and resource monitoring
+- **Custom Metrics**: Agent performance, latency, success rates
+- **Distributed Tracing**: Request flow across services
+- **Structured Logging**: JSON formatted logs with correlation
+
+### Accessing Metrics
+
+1. **Azure Portal**: Navigate to Application Insights resource
+2. **Backend API**: `GET /metrics` endpoint
+3. **Frontend Dashboard**: Observability panel in the UI
+
+## 🤖 Agent System
+
+### Manager Agent
+- Orchestrates worker agents
+- Creates research plans
+- Facilitates group chat collaboration
+- Synthesizes findings
+- Generates final reports
+
+### Bing Search Agent
+- Searches web content
+- Retrieves news articles
+- Finds academic papers
+- Provides relevance scoring
+
+### AI Search Agent
+- Queries internal knowledge base
+- Performs semantic search
+- Uses vector similarity
+- Enhances with knowledge graph
+
+### Agent Evaluation
+- Performance scoring (accuracy, latency, relevance)
+- Completeness assessment
+- Confidence calibration
+- Agreement analysis
+
+## 🚢 Deployment
+
+### CI/CD Pipeline
+
+The GitHub Actions workflow handles:
+
+1. **Testing**: Backend and frontend tests
+2. **Validation**: Infrastructure templates
+3. **Deployment**: Staged deployment to environments
+4. **Validation**: E2E testing post-deployment
+
+### Manual Deployment
+
+```bash
+# Set environment
+export ENVIRONMENT=prod
+
+# Deploy all components
+./scripts/deploy_resources.sh
+./scripts/deploy_backend.sh
+./scripts/deploy_frontend.sh
+
+# Validate
+./scripts/validate_end_to_end.sh
+```
+
+### Environments
+
+- **dev**: Development environment
+- **test**: Testing/staging environment
+- **prod**: Production environment
+
+## 🔒 Security
+
+- **HTTPS Only**: Enforced for all services
+- **Managed Identity**: Azure resource authentication
+- **Key Vault**: Secure secret management
+- **Private Endpoints**: Network isolation (optional)
+- **CORS Configuration**: Controlled cross-origin access
+- **Input Validation**: Request sanitization
+- **Rate Limiting**: API throttling
+
+## 📈 Performance
+
+- **Caching**: Response caching for repeated queries
+- **Async Processing**: Non-blocking agent execution
+- **Connection Pooling**: Efficient database connections
+- **CDN**: Static asset delivery (frontend)
+- **Auto-scaling**: App Service scaling rules
+- **Performance Monitoring**: Application Insights profiling
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📝 API Documentation
+
+Once deployed, access the interactive API documentation at:
+
+- **Swagger UI**: `https://your-backend-url/docs`
+- **ReDoc**: `https://your-backend-url/redoc`
+
+### Key Endpoints
+
+- `POST /research` - Conduct research with query
+- `GET /agents` - List all agents and status
+- `GET /metrics` - Get system metrics
+- `GET /evaluation/history` - Get evaluation history
+- `GET /healthz` - Health check
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Deployment Fails**
+   - Check Azure subscription and permissions
+   - Verify resource quotas
+   - Review deployment logs in Azure Portal
+
+2. **Backend Not Responding**
+   - Check App Service logs
+   - Verify environment variables
+   - Test health endpoint: `/healthz`
+
+3. **Frontend Connection Issues**
+   - Verify CORS configuration
+   - Check API URL in frontend config
+   - Review browser console errors
+
+4. **Agent Failures**
+   - Check API keys and endpoints
+   - Review agent logs in Application Insights
+   - Verify Azure service connectivity
+
+### Debug Commands
+
+```bash
+# Check backend logs
+az webapp log tail --name <app-service-name> --resource-group <rg-name>
+
+# Test backend health
+curl https://your-backend-url/healthz
+
+# Check frontend deployment
+az storage blob list --account-name <storage-name> --container-name '$web'
+```
+
+## 📚 Documentation
+
+- [Backend API Documentation](./backend/README.md)
+- [Frontend Documentation](./frontend/README.md)
+- [Infrastructure Guide](./infra/README.md)
+- [Agent Development Guide](./docs/agents.md)
+- [Deployment Guide](./docs/deployment.md)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Azure AI Services team for excellent documentation
+- FastAPI community for the amazing framework
+- React and Tailwind CSS communities
+- OpenAI for GPT models
+- Microsoft for Azure cloud platform
+
+## 📞 Support
+
+For issues and questions:
+- Open an issue in GitHub
+- Check existing issues for solutions
+- Review documentation and guides
+
+---
+
+**Built with ❤️ using Azure AI and modern web technologies**

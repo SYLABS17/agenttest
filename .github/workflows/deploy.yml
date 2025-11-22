@@ -1,0 +1,326 @@
+name: Deploy AI Research System
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+env:
+  NODE_VERSION: '18.x'
+  PYTHON_VERSION: '3.11'
+  AZURE_WEBAPP_PACKAGE_PATH: 'backend'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'functions'
+
+jobs:
+  # Lint and Test Backend
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio flake8 black
+          
+      - name: Lint with flake8
+        run: |
+          cd backend
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          
+      - name: Format check with black
+        run: |
+          cd backend
+          black --check . || true
+          
+      - name: Run tests
+        run: |
+          cd backend
+          pytest tests/ --cov=. --cov-report=xml --cov-report=html
+          
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+
+  # Lint and Test Frontend
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+          
+      - name: Lint
+        run: |
+          cd frontend
+          npm run lint || true
+          
+      - name: Run tests
+        run: |
+          cd frontend
+          CI=true npm test -- --coverage --watchAll=false
+          
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+
+  # Validate ARM Templates
+  validate-infrastructure:
+    name: Validate Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Validate Bicep templates
+        run: |
+          if [ -f "infra/main.bicep" ]; then
+            az bicep build --file infra/main.bicep
+          fi
+          
+      - name: Validate ARM templates
+        run: |
+          if [ -f "infra/azuredeploy.json" ]; then
+            az deployment sub validate \
+              --location eastus \
+              --template-file infra/azuredeploy.json \
+              --parameters infra/parameters.json
+          fi
+
+  # Deploy Infrastructure
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [validate-infrastructure]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    outputs:
+      resourceGroup: ${{ steps.deploy.outputs.resourceGroup }}
+      appServiceName: ${{ steps.deploy.outputs.appServiceName }}
+      storageAccount: ${{ steps.deploy.outputs.storageAccount }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_ENV
+          echo "LOCATION=eastus" >> $GITHUB_ENV
+          echo "PROJECT_NAME=airesearch" >> $GITHUB_ENV
+          
+      - name: Deploy Azure Resources
+        id: deploy
+        run: |
+          chmod +x scripts/deploy_resources.sh
+          ./scripts/deploy_resources.sh
+          
+          # Output key values for next jobs
+          echo "resourceGroup=rg-${PROJECT_NAME}-${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "appServiceName=app-${PROJECT_NAME}-${ENVIRONMENT}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "storageAccount=st${PROJECT_NAME}${ENVIRONMENT}" >> $GITHUB_OUTPUT
+
+  # Deploy Backend
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [test-backend, deploy-infrastructure]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Create deployment package
+        run: |
+          cd backend
+          zip -r deploy.zip . -x "*.git*" "__pycache__/*" "*.pyc" ".env*" "tests/*"
+          
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ needs.deploy-infrastructure.outputs.appServiceName }}
+          package: backend/deploy.zip
+          
+      - name: Configure App Settings
+        run: |
+          az webapp config appsettings set \
+            --resource-group ${{ needs.deploy-infrastructure.outputs.resourceGroup }} \
+            --name ${{ needs.deploy-infrastructure.outputs.appServiceName }} \
+            --settings \
+              APP_ENV="${{ github.event.inputs.environment || 'dev' }}" \
+              AZURE_OPENAI_ENDPOINT="${{ secrets.AZURE_OPENAI_ENDPOINT }}" \
+              AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
+              AZURE_SEARCH_ENDPOINT="${{ secrets.AZURE_SEARCH_ENDPOINT }}" \
+              AZURE_SEARCH_API_KEY="${{ secrets.AZURE_SEARCH_API_KEY }}" \
+              APPINSIGHTS_INSTRUMENTATION_KEY="${{ secrets.APPINSIGHTS_INSTRUMENTATION_KEY }}"
+
+  # Deploy Frontend
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [test-frontend, deploy-infrastructure, deploy-backend]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          
+          # Set production environment variables
+          echo "REACT_APP_API_URL=https://${{ needs.deploy-infrastructure.outputs.appServiceName }}.azurewebsites.net" >> .env.production
+          echo "REACT_APP_ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}" >> .env.production
+          
+          npm run build
+          
+      - name: Deploy to Azure Storage
+        run: |
+          # Enable static website
+          az storage blob service-properties update \
+            --account-name ${{ needs.deploy-infrastructure.outputs.storageAccount }} \
+            --static-website \
+            --index-document index.html \
+            --404-document index.html
+            
+          # Upload files
+          az storage blob upload-batch \
+            --account-name ${{ needs.deploy-infrastructure.outputs.storageAccount }} \
+            --source frontend/build \
+            --destination '$web' \
+            --overwrite
+
+  # End-to-End Validation
+  validate-deployment:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Run validation tests
+        run: |
+          chmod +x scripts/validate_end_to_end.sh
+          
+          export ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
+          export AZURE_RESOURCE_GROUP=${{ needs.deploy-infrastructure.outputs.resourceGroup }}
+          export APP_SERVICE_NAME=${{ needs.deploy-infrastructure.outputs.appServiceName }}
+          export AZURE_STORAGE_ACCOUNT=${{ needs.deploy-infrastructure.outputs.storageAccount }}
+          
+          ./scripts/validate_end_to_end.sh
+          
+      - name: Health check
+        run: |
+          BACKEND_URL="https://${{ needs.deploy-infrastructure.outputs.appServiceName }}.azurewebsites.net"
+          
+          # Check backend health
+          curl -f "${BACKEND_URL}/healthz" || exit 1
+          
+          echo "Deployment validation successful!"
+
+  # Cleanup on PR close (optional)
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Delete PR resources
+        run: |
+          # Delete PR-specific resources if needed
+          echo "Cleanup for PR #${{ github.event.pull_request.number }}"
+          # Add cleanup commands here
