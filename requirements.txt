@@ -1,0 +1,14 @@
+# Azure Functions
+azure-functions>=1.17.0
+
+# Microsoft Semantic Kernel
+semantic-kernel>=1.0.0
+
+# Async HTTP client for AI service calls
+aiohttp>=3.9.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Pydantic for data validation
+pydantic>=2.0.0
