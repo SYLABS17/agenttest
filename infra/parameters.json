@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectName": {
+      "value": "airesearch"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "appServicePlanSku": {
+      "value": "S1"
+    },
+    "searchServiceSku": {
+      "value": "standard"
+    },
+    "openAiSku": {
+      "value": "S0"
+    },
+    "storageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "owner": {
+      "value": "AI Research Team"
+    },
+    "costCenter": {
+      "value": "RESEARCH-001"
+    }
+  }
+}

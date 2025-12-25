@@ -1,0 +1,370 @@
+name: Deploy AI Research System
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+env:
+  NODE_VERSION: '18.x'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Lint and Test Job
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      # Backend linting and testing
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black pytest pytest-asyncio pytest-cov
+      
+      - name: Lint backend with flake8
+        working-directory: ./backend
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Test backend
+        working-directory: ./backend
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+      
+      # Frontend linting and testing
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint || true
+      
+      - name: Test frontend
+        working-directory: ./frontend
+        run: npm run test -- --run
+      
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/htmlcov/
+
+  # Validate ARM Templates
+  validate-templates:
+    name: Validate ARM Templates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Validate ARM template
+        uses: azure/arm-deploy@v1
+        with:
+          resourceGroupName: ai-research-system-dev-rg
+          template: ./infra/main.json
+          parameters: ./infra/parameters.json
+          deploymentMode: Validate
+
+  # Build Job
+  build:
+    name: Build Applications
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, validate-templates]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      # Build frontend
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: ${{ vars.API_URL }}
+      
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/dist/
+      
+      # Package backend
+      - name: Package backend
+        working-directory: ./backend
+        run: |
+          zip -r ../backend-package.zip . -x "*.pyc" -x "__pycache__/*" -x ".pytest_cache/*" -x "tests/*"
+      
+      - name: Upload backend package
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-package
+          path: backend-package.zip
+
+  # Deploy Infrastructure
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Set environment variables
+        run: |
+          echo "ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_ENV
+          echo "RESOURCE_GROUP=ai-research-system-${{ github.event.inputs.environment || 'dev' }}-rg" >> $GITHUB_ENV
+      
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name ${{ env.RESOURCE_GROUP }} \
+            --location eastus \
+            --tags Environment=${{ env.ENVIRONMENT }} Project=AIResearchSystem
+      
+      - name: Deploy ARM template
+        uses: azure/arm-deploy@v1
+        id: deploy
+        with:
+          resourceGroupName: ${{ env.RESOURCE_GROUP }}
+          template: ./infra/main.json
+          parameters: ./infra/parameters.json environment=${{ env.ENVIRONMENT }}
+          deploymentMode: Incremental
+      
+      - name: Save deployment outputs
+        run: |
+          echo '${{ toJson(steps.deploy.outputs) }}' > deployment-outputs.json
+      
+      - name: Upload deployment outputs
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-outputs
+          path: deployment-outputs.json
+
+  # Deploy Backend
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+      url: ${{ steps.deploy.outputs.app-url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend package
+        uses: actions/download-artifact@v3
+        with:
+          name: backend-package
+      
+      - name: Download deployment outputs
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-outputs
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Get Web App name
+        id: webapp
+        run: |
+          WEB_APP_NAME=$(jq -r '.webAppName.value' deployment-outputs.json)
+          echo "WEB_APP_NAME=$WEB_APP_NAME" >> $GITHUB_ENV
+          echo "webapp-name=$WEB_APP_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.WEB_APP_NAME }}
+          package: backend-package.zip
+      
+      - name: Set App Settings
+        run: |
+          az webapp config appsettings set \
+            --resource-group ai-research-system-${{ github.event.inputs.environment || 'dev' }}-rg \
+            --name ${{ env.WEB_APP_NAME }} \
+            --settings \
+              API_ENV=${{ github.event.inputs.environment || 'dev' }} \
+              ENABLE_DUMMY_MODE=true \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true
+    
+    outputs:
+      app-url: https://${{ steps.webapp.outputs.webapp-name }}.azurewebsites.net
+
+  # Deploy Frontend
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-backend]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+      url: ${{ steps.deploy.outputs.static-url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download frontend build
+        uses: actions/download-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend-dist
+      
+      - name: Download deployment outputs
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-outputs
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Get Storage Account name
+        id: storage
+        run: |
+          STORAGE_ACCOUNT=$(jq -r '.storageAccountName.value' deployment-outputs.json)
+          echo "STORAGE_ACCOUNT=$STORAGE_ACCOUNT" >> $GITHUB_ENV
+          echo "storage-account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
+      
+      - name: Enable static website
+        run: |
+          az storage blob service-properties update \
+            --account-name ${{ env.STORAGE_ACCOUNT }} \
+            --static-website \
+            --index-document index.html \
+            --404-document index.html
+      
+      - name: Upload to blob storage
+        run: |
+          az storage blob upload-batch \
+            --account-name ${{ env.STORAGE_ACCOUNT }} \
+            --source frontend-dist \
+            --destination '$web' \
+            --overwrite
+      
+      - name: Get static website URL
+        id: deploy
+        run: |
+          STATIC_URL=$(az storage account show \
+            --name ${{ env.STORAGE_ACCOUNT }} \
+            --resource-group ai-research-system-${{ github.event.inputs.environment || 'dev' }}-rg \
+            --query primaryEndpoints.web \
+            --output tsv)
+          echo "static-url=$STATIC_URL" >> $GITHUB_OUTPUT
+          echo "Frontend deployed to: $STATIC_URL"
+    
+    outputs:
+      static-url: ${{ steps.deploy.outputs.static-url }}
+
+  # End-to-End Validation
+  validate-deployment:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Wait for services to be ready
+        run: sleep 30
+      
+      - name: Test Backend Health
+        run: |
+          curl -f ${{ needs.deploy-backend.outputs.app-url }}/health || exit 1
+      
+      - name: Test Frontend Availability
+        run: |
+          curl -f ${{ needs.deploy-frontend.outputs.static-url }} || exit 1
+      
+      - name: Run E2E Tests
+        run: |
+          # Test research endpoint
+          curl -X POST ${{ needs.deploy-backend.outputs.app-url }}/api/test/dummy-query \
+            -H "Content-Type: application/json" \
+            --fail \
+            --max-time 60
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: ${{ needs.deploy-backend.outputs.app-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: ${{ needs.deploy-frontend.outputs.static-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API Docs: ${{ needs.deploy-backend.outputs.app-url }}/docs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Environment" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
