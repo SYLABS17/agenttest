@@ -1,0 +1,89 @@
+name: Azure AI Research CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend deps
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run backend tests
+        run: |
+          cd backend
+          pytest
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm install
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm run test -- --run
+
+  validate-arm:
+    needs: [backend-tests, frontend-tests]
+    runs-on: ubuntu-latest
+    env:
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      LOCATION: ${{ secrets.LOCATION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Validate monitor template
+        run: |
+          az deployment group validate \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/monitor.json \
+            --parameters baseName=ci environment=dev owner=github costCenter=ci-test location="$LOCATION" archiveStorageAccountId='' || true
+        shell: bash
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: [validate-arm]
+    runs-on: ubuntu-latest
+    env:
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      LOCATION: ${{ secrets.LOCATION }}
+      BASE_NAME: ${{ secrets.BASE_NAME }}
+      SUBNET_RESOURCE_ID: ${{ secrets.SUBNET_RESOURCE_ID }}
+      PRIVATE_DNS_ZONE_ID: ${{ secrets.PRIVATE_DNS_ZONE_ID }}
+      BACKEND_APP_NAME: ${{ secrets.BACKEND_APP_NAME }}
+      FRONTEND_APP_NAME: ${{ secrets.FRONTEND_APP_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Deploy infrastructure
+        run: ./scripts/deploy_resources.sh
+      - name: Deploy backend
+        run: ./scripts/deploy_backend.sh
+      - name: Deploy frontend
+        run: ./scripts/deploy_frontend.sh

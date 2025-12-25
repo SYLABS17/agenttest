@@ -1,0 +1,20 @@
+{
+  "title": "Research Brief: Impact of generative AI on journalism",
+  "summary": "News organisations are deploying Azure OpenAI copilots alongside Azure AI Search over archives to accelerate scripting while investing in provenance signals to sustain trust.",
+  "key_insights": [
+    "Copilot-assisted workflows cut script drafting time by 40% while keeping editors in the loop.",
+    "Content safety guardrails and watermarking experiments boost reader trust scores in pilot markets.",
+    "Unions advocate for reskilling budgets, emphasising investigative and data journalism capabilities."
+  ],
+  "sources": [
+    "https://www.niemanlab.org/ai-newsroom",
+    "https://insights.fabric.net/media-ai"
+  ],
+  "topics": [
+    "journalism",
+    "trust",
+    "content safety",
+    "productivity"
+  ],
+  "generated_at": "2025-11-22T00:00:00Z"
+}

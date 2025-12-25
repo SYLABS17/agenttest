@@ -1,0 +1,34 @@
+{
+  "title": "Research Brief: Impact of generative AI on journalism",
+  "summary": "The research team analysed 2 knowledge channels to explore 'Impact of generative AI on journalism'.",
+  "key_insights": [
+    "Major broadcasters report 40% faster script iterations when reporters pair GPT-style copilots with newsroom CMS plugins.",
+    "Newsrooms that log AI provenance metadata see higher reader trust metrics in beta experiments.",
+    "Labour unions push for reskilling credits to avoid hollowing out investigative desks.",
+    "Azure AI Content Safety is being embedded to keep hallucination risk below 2% in trial deployments.",
+    "Azure OpenAI powered summary briefs let editors personalise newsletters per cohort, improving CTR by 18%.",
+    "AI search over archives accelerates background research, freeing investigative teams for interviews."
+  ],
+  "sources": [
+    "https://www.niemanlab.org/ai-newsroom",
+    "https://www.poynter.org/reporting/ai-provenance",
+    "https://www.reuters.com/technology/media-labour-2025",
+    "https://contoso.sharepoint.com/sites/newsroom-coe",
+    "https://insights.fabric.net/media-ai",
+    "https://internalwiki/newsroom/genai-readiness"
+  ],
+  "topics": [
+    "content safety",
+    "journalism",
+    "labour",
+    "personalisation",
+    "productivity",
+    "trust",
+    "workflow"
+  ],
+  "next_steps": [
+    "Validate findings with domain experts.",
+    "Operationalise promising initiatives in pilot regions.",
+    "Instrument telemetry for live monitoring."
+  ]
+}

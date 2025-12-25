@@ -1,0 +1,561 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "test",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Deployment environment used for tagging and diagnostics."
+      }
+    },
+    "owner": {
+      "type": "string",
+      "metadata": {
+        "description": "Business owner for tagging."
+      }
+    },
+    "costCenter": {
+      "type": "string",
+      "metadata": {
+        "description": "Cost center used for tagging and charge-back."
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 11,
+      "metadata": {
+        "description": "Short prefix applied to all resource names (must allow compliant storage account names)."
+      }
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Log Analytics workspace used for diagnostics."
+      }
+    },
+    "appInsightsConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Connection string for Application Insights telemetry ingestion."
+      }
+    },
+    "subnetResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the delegated subnet for private endpoints."
+      }
+    },
+    "privateDnsZoneId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Private DNS zone used by private endpoints."
+      }
+    },
+    "appServiceSku": {
+      "type": "object",
+      "defaultValue": {
+        "name": "P1v3",
+        "tier": "PremiumV3",
+        "size": "P1v3",
+        "capacity": 1
+      },
+      "metadata": {
+        "description": "SKU configuration for the App Service plan."
+      }
+    },
+    "storageSku": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_ZRS"
+      ],
+      "metadata": {
+        "description": "Storage Account SKU."
+      }
+    },
+    "nsgAllowedSource": {
+      "type": "string",
+      "defaultValue": "VirtualNetwork",
+      "metadata": {
+        "description": "Source address prefix allowed through the NSG."
+      }
+    }
+  },
+  "variables": {
+    "tags": {
+      "env": "[parameters('environment')]",
+      "owner": "[parameters('owner')]",
+      "costCenter": "[parameters('costCenter')]"
+    },
+    "storageAccountName": "[toLower(concat(parameters('baseName'), 'stg01'))]",
+    "appServicePlanName": "[concat(parameters('baseName'), '-plan')]",
+    "backendAppName": "[concat(parameters('baseName'), '-api')]",
+    "frontendAppName": "[concat(parameters('baseName'), '-web')]",
+    "nsgName": "[concat(parameters('baseName'), '-nsg')]",
+    "storagePrivateEndpointName": "[concat(parameters('baseName'), '-stg-pe')]",
+    "backendPrivateEndpointName": "[concat(parameters('baseName'), '-api-pe')]",
+    "frontendPrivateEndpointName": "[concat(parameters('baseName'), '-web-pe')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "[parameters('storageSku')]"
+      },
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true,
+        "allowSharedKeyAccess": false,
+        "accessTier": "Hot"
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2016-09-01",
+      "name": "[concat('lock-', variables('storageAccountName'))]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "Protect storage account from accidental deletion."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": "[parameters('appServiceSku')]",
+      "properties": {
+        "reserved": true,
+        "zoneRedundant": true
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2016-09-01",
+      "name": "[concat('lock-', variables('appServicePlanName'))]",
+      "scope": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+      "properties": {
+        "level": "CanNotDelete",
+        "notes": "Protect App Service plan."
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('backendAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "enabled": true,
+        "httpsOnly": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "siteConfig": {
+          "linuxFxVersion": "PYTHON|3.11",
+          "appSettings": [
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "1"
+            },
+            {
+              "name": "APPINSIGHTS_CONNECTIONSTRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "STORAGE_ACCOUNT_URI",
+              "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').primaryEndpoints.blob]"
+            }
+          ],
+          "alwaysOn": true,
+          "ftpsState": "Disabled",
+          "http20Enabled": true,
+          "minTlsVersion": "1.2"
+        }
+      },
+      "tags": "[variables('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('frontendAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "enabled": true,
+        "httpsOnly": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "siteConfig": {
+          "linuxFxVersion": "NODE|20-lts",
+          "appSettings": [
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "1"
+            },
+            {
+              "name": "APPINSIGHTS_CONNECTIONSTRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[parameters('appInsightsConnectionString')]"
+            },
+            {
+              "name": "REACT_APP_API_BASE_URL",
+              "value": "[concat('https://', variables('backendAppName'), '.azurewebsites.net')]"
+            }
+          ],
+          "alwaysOn": true,
+          "ftpsState": "Disabled",
+          "http20Enabled": true,
+          "minTlsVersion": "1.2",
+          "cors": {
+            "allowedOrigins": [
+              "[concat('https://', variables('frontendAppName'), '.azurewebsites.net')]"
+            ]
+          }
+        }
+      },
+      "tags": "[variables('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowAppServiceInbound",
+            "properties": {
+              "description": "Allow inbound App Service management traffic.",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('nsgAllowedSource')]",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "DenyInternet",
+            "properties": {
+              "description": "Deny direct internet traffic; resources reachable only through private endpoints.",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 200,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      },
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('storagePrivateEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[parameters('subnetResourceId')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "storageConnection",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+              "groupIds": [
+                "blob"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "tags": "[variables('tags')]",
+      "resources": [
+        {
+          "type": "privateDnsZoneGroups",
+          "apiVersion": "2023-09-01",
+          "name": "default",
+          "dependsOn": [
+            "[resourceId('Microsoft.Network/privateEndpoints', variables('storagePrivateEndpointName'))]"
+          ],
+          "properties": {
+            "privateDnsZoneConfigs": [
+              {
+                "name": "blobZone",
+                "properties": {
+                  "privateDnsZoneId": "[parameters('privateDnsZoneId')]"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('backendPrivateEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[parameters('subnetResourceId')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "backendConnection",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Web/sites', variables('backendAppName'))]",
+              "groupIds": [
+                "sites"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('backendAppName'))]"
+      ],
+      "tags": "[variables('tags')]",
+      "resources": [
+        {
+          "type": "privateDnsZoneGroups",
+          "apiVersion": "2023-09-01",
+          "name": "default",
+          "dependsOn": [
+            "[resourceId('Microsoft.Network/privateEndpoints', variables('backendPrivateEndpointName'))]"
+          ],
+          "properties": {
+            "privateDnsZoneConfigs": [
+              {
+                "name": "webZone",
+                "properties": {
+                  "privateDnsZoneId": "[parameters('privateDnsZoneId')]"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('frontendPrivateEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[parameters('subnetResourceId')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "frontendConnection",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Web/sites', variables('frontendAppName'))]",
+              "groupIds": [
+                "sites"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('frontendAppName'))]"
+      ],
+      "tags": "[variables('tags')]",
+      "resources": [
+        {
+          "type": "privateDnsZoneGroups",
+          "apiVersion": "2023-09-01",
+          "name": "default",
+          "dependsOn": [
+            "[resourceId('Microsoft.Network/privateEndpoints', variables('frontendPrivateEndpointName'))]"
+          ],
+          "properties": {
+            "privateDnsZoneConfigs": [
+              {
+                "name": "webZone",
+                "properties": {
+                  "privateDnsZoneId": "[parameters('privateDnsZoneId')]"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(variables('backendAppName'), '-diag')]",
+      "scope": "[resourceId('Microsoft.Web/sites', variables('backendAppName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('backendAppName'))]"
+      ],
+      "properties": {
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "logs": [
+          {
+            "category": "AppServiceHTTPLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceConsoleLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceAppLogs",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(variables('frontendAppName'), '-diag')]",
+      "scope": "[resourceId('Microsoft.Web/sites', variables('frontendAppName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('frontendAppName'))]"
+      ],
+      "properties": {
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "logs": [
+          {
+            "category": "AppServiceHTTPLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceConsoleLogs",
+            "enabled": true
+          },
+          {
+            "category": "AppServiceAppLogs",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(variables('storageAccountName'), '-diag')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+        "logs": [
+          {
+            "category": "StorageRead",
+            "enabled": true
+          },
+          {
+            "category": "StorageWrite",
+            "enabled": true
+          },
+          {
+            "category": "StorageDelete",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "Transaction",
+            "enabled": true
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "backendAppName": {
+      "type": "string",
+      "value": "[variables('backendAppName')]"
+    },
+    "frontendAppName": {
+      "type": "string",
+      "value": "[variables('frontendAppName')]"
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "value": "[variables('appServicePlanName')]"
+    }
+  }
+}

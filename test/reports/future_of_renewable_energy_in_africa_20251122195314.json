@@ -1,0 +1,34 @@
+{
+  "title": "Research Brief: Future of renewable energy in Africa",
+  "summary": "The research team analysed 2 knowledge channels to explore 'Future of renewable energy in Africa'.",
+  "key_insights": [
+    "Kenyan utilities approved 3GW of hybrid solar-storage tenders for 2026 delivery.",
+    "Cross-border transmission corridors backed by AfDB aim to reduce curtailment by 25%.",
+    "Microgrid-as-a-service models led by startups in Nigeria now bundle fintech rails for pay-as-you-go tariffs.",
+    "Development finance institutions are bundling carbon credits with power purchase agreements to unlock patient capital.",
+    "Workforce localisation mandates require 40% of O&M roles to be filled by local talent by 2027 in several markets.",
+    "Edge analytics on mini-grids reduce downtime by predicting inverter failures five days ahead."
+  ],
+  "sources": [
+    "https://www.afdb.org/en/news/green-baseload",
+    "https://energyindustryreview.com/africa/hybrid-storage-programs",
+    "https://techcabal.com/microgrid-sa",
+    "https://contosoenergy.sharepoint.com/sites/emea-renewables",
+    "https://fabric.firmwide.net/insights/africa-energy-transition",
+    "https://example.org/research/hybrid-mini-grids"
+  ],
+  "topics": [
+    "blended finance",
+    "fintech",
+    "predictive maintenance",
+    "solar",
+    "storage",
+    "transmission",
+    "workforce"
+  ],
+  "next_steps": [
+    "Validate findings with domain experts.",
+    "Operationalise promising initiatives in pilot regions.",
+    "Instrument telemetry for live monitoring."
+  ]
+}

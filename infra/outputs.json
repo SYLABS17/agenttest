@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "backendAppName": {
+      "type": "string"
+    },
+    "frontendAppName": {
+      "type": "string"
+    },
+    "storageAccountName": {
+      "type": "string"
+    },
+    "searchServiceName": {
+      "type": "string"
+    },
+    "openAiAccountName": {
+      "type": "string"
+    },
+    "languageAccountName": {
+      "type": "string"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string"
+    },
+    "appInsightsConnectionString": {
+      "type": "string"
+    }
+  },
+  "resources": [],
+  "outputs": {
+    "backendUrl": {
+      "type": "string",
+      "value": "[concat('https://', parameters('backendAppName'), '.azurewebsites.net')]"
+    },
+    "frontendUrl": {
+      "type": "string",
+      "value": "[concat('https://', parameters('frontendAppName'), '.azurewebsites.net')]"
+    },
+    "storageAccountId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+    },
+    "searchEndpoint": {
+      "type": "string",
+      "value": "[concat('https://', parameters('searchServiceName'), '.search.windows.net')]"
+    },
+    "openAiEndpoint": {
+      "type": "string",
+      "value": "[concat('https://', parameters('openAiAccountName'), '.openai.azure.com/')]"
+    },
+    "languageEndpoint": {
+      "type": "string",
+      "value": "[concat('https://', parameters('languageAccountName'), '.cognitiveservices.azure.com/')]"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[parameters('logAnalyticsWorkspaceId')]"
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "value": "[parameters('appInsightsConnectionString')]"
+    }
+  }
+}
