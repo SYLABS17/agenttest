@@ -70,3 +70,7 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Archives
+*.zip
+*.tar.gz
