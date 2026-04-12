@@ -1,0 +1,24 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+
+    "AZURE_FACE_ENDPOINT": "https://your-face-api.cognitiveservices.azure.com/",
+    "AZURE_FACE_KEY": "your-face-api-key",
+    "USE_MANAGED_IDENTITY": "false",
+
+    "AMS_BASE_URL": "https://your-ams-api.example.com",
+    "AMS_AUTH_TYPE": "api_key",
+    "AMS_API_KEY": "your-ams-api-key",
+    "AMS_API_KEY_HEADER": "X-API-Key",
+
+    "TOKEN_VALIDITY_MINUTES": "10",
+    "REQUIRE_LIVE_FOR_AMS": "true",
+    "MIN_LIVENESS_CONFIDENCE": "0.8"
+  },
+  "Host": {
+    "CORS": "*",
+    "CORSCredentials": false
+  }
+}
