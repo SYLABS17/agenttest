@@ -1,4 +1,4 @@
-"""Main query pipeline orchestrator for National LMS."""
+"""Main query pipeline orchestrator for LMS."""
 
 import time
 from typing import Optional
@@ -26,9 +26,9 @@ from src.pipeline.models import (
 logger = structlog.get_logger(__name__)
 
 
-class NationalLMSPipeline:
+class LMSPipeline:
     """
-    Main orchestrator for the National Learning Management System.
+    Main orchestrator for the Learning Management System.
 
     Processes student queries through:
     1. Translation with glossary preservation
@@ -313,8 +313,8 @@ class NationalLMSPipeline:
         }
 
 
-async def create_pipeline() -> NationalLMSPipeline:
+async def create_pipeline() -> LMSPipeline:
     """Factory function to create a fully configured pipeline."""
-    pipeline = NationalLMSPipeline()
+    pipeline = LMSPipeline()
     logger.info("pipeline_created")
     return pipeline

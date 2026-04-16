@@ -1,4 +1,4 @@
-# National LMS - AWS Implementation
+# LMS - AWS Implementation
 # Core Dependencies
 
 # AWS SDK

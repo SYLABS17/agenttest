@@ -1,6 +1,6 @@
-# National Learning Management System - Azure Implementation
+# Learning Management System - Azure Implementation
 
-Multi-modal RAG system for 500 million students across 15+ Indian languages, powered by Azure AI services.
+Multi-modal RAG system across multiple regional languages, powered by Azure AI services.
 
 ## Architecture
 

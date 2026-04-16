@@ -30,7 +30,7 @@ class TestParentChildChunker:
             source_type="textbook",
             subject="biology",
             grade_level="class_10",
-            board="NCERT",
+            board="curriculum_board",
         )
 
         chunks = chunker.chunk_document(content, metadata)
@@ -75,7 +75,7 @@ class TestParentChildChunker:
             source_type="video_transcript",
             subject="biology",
             grade_level="class_10",
-            board="NCERT",
+            board="curriculum_board",
             video_id="test_video_1",
         )
 
@@ -104,7 +104,7 @@ class TestChunk:
             source_type="textbook",
             subject="biology",
             grade_level="class_10",
-            board="NCERT",
+            board="curriculum_board",
         )
 
         chunk = Chunk(
@@ -128,7 +128,7 @@ class TestChunk:
             source_type="textbook",
             subject="biology",
             grade_level="class_10",
-            board="NCERT",
+            board="curriculum_board",
             chapter="Life Processes",
         )
 
@@ -152,7 +152,7 @@ class TestChunk:
             "source_type": "textbook",
             "subject": "biology",
             "grade_level": "class_10",
-            "board": "NCERT",
+            "board": "curriculum_board",
         }
 
         chunk = Chunk.from_dict(data)

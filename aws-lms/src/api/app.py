@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create FastAPI application."""
     application = FastAPI(
-        title="National LMS API - AWS",
+        title="LMS API - AWS",
         description="Multi-modal RAG API powered by Amazon Web Services",
         version="1.0.0",
         lifespan=lifespan,
@@ -55,7 +55,7 @@ class QueryRequestModel(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     language: str = Field(default="en")
     grade_level: str = Field(default="class_10")
-    board: str = Field(default="NCERT")
+    board: str = Field(default="curriculum_board")
     subjects: list[str] = Field(default=[])
     include_video: bool = Field(default=True)
 

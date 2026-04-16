@@ -1,4 +1,4 @@
-"""FastAPI application for National LMS."""
+"""FastAPI application for LMS."""
 
 from src.api.app import create_app
 

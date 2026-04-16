@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "National LMS (GCP)"
+    app_name: str = "LMS (GCP)"
     app_version: str = "1.0.0"
     cloud_provider: Literal["gcp"] = "gcp"
     environment: Literal["development", "staging", "production"] = "development"

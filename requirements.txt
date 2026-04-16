@@ -1,4 +1,4 @@
-# National LMS - Multi-modal RAG System
+# LMS - Multi-modal RAG System
 # Core Dependencies
 
 # Azure SDK

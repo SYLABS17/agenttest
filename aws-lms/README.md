@@ -1,6 +1,6 @@
-# National Learning Management System - AWS Implementation
+# Learning Management System - AWS Implementation
 
-Multi-modal RAG system for 500 million students across 15+ Indian languages, powered by AWS AI services.
+Multi-modal RAG system across multiple regional languages, powered by AWS AI services.
 
 ## Architecture
 

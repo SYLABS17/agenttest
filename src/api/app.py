@@ -1,4 +1,4 @@
-"""FastAPI application for National LMS API."""
+"""FastAPI application for LMS API."""
 
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -9,13 +9,13 @@ from pydantic import BaseModel, Field
 import structlog
 
 from src.config import get_settings
-from src.pipeline import NationalLMSPipeline, QueryRequest, QueryResponse
+from src.pipeline import LMSPipeline, QueryRequest, QueryResponse
 from src.pipeline.models import UserContext
 
 logger = structlog.get_logger(__name__)
 
 # Global pipeline instance
-_pipeline: Optional[NationalLMSPipeline] = None
+_pipeline: Optional[LMSPipeline] = None
 
 
 @asynccontextmanager
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan."""
     global _pipeline
     logger.info("starting_application")
-    _pipeline = NationalLMSPipeline()
+    _pipeline = LMSPipeline()
     yield
     logger.info("shutting_down_application")
 
@@ -33,8 +33,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="National LMS API",
-        description="Multi-modal RAG API serving 500 million students across 15+ Indian languages",
+        title="LMS API",
+        description="Multi-modal RAG API serving students across multiple regional languages",
         version="1.0.0",
         lifespan=lifespan,
     )
@@ -63,7 +63,7 @@ class QueryRequestModel(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000, description="The question to answer")
     language: str = Field(default="en", description="Source language code (e.g., 'hi', 'ta', 'en')")
     grade_level: str = Field(default="class_10", description="Student grade level")
-    board: str = Field(default="NCERT", description="Education board")
+    board: str = Field(default="curriculum board", description="Education board")
     subjects: list[str] = Field(default=[], description="Relevant subjects")
     include_video: bool = Field(default=True, description="Include video segment references")
     max_chunks: int = Field(default=7, ge=1, le=20, description="Maximum context chunks")
@@ -74,7 +74,7 @@ class QueryRequestModel(BaseModel):
                 "query": "What is photosynthesis?",
                 "language": "hi",
                 "grade_level": "class_10",
-                "board": "NCERT",
+                "board": "curriculum_board",
                 "subjects": ["biology"],
                 "include_video": True,
             }
@@ -101,7 +101,7 @@ class QueryResponseModel(BaseModel):
                 "sources": [
                     {
                         "source_type": "textbook",
-                        "board": "NCERT",
+                        "board": "curriculum_board",
                         "subject": "biology",
                         "chapter": "Life Processes",
                     }

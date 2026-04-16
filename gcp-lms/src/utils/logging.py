@@ -1,4 +1,4 @@
-"""Logging configuration for National LMS."""
+"""Logging configuration for LMS."""
 
 import logging
 import sys

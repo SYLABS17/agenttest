@@ -13,7 +13,7 @@ class ChunkMetadata:
     source_type: str  # "textbook", "lecture_notes", "video_transcript", etc.
     subject: str  # "biology", "mathematics", "physics", etc.
     grade_level: str  # "class_10", "undergraduate", etc.
-    board: str  # "NCERT", "CBSE", "state_board_tamil_nadu", etc.
+    board: str  # "curriculum_board", "state_board", etc.
     chapter: Optional[str] = None
     section: Optional[str] = None
     page_number: Optional[int] = None

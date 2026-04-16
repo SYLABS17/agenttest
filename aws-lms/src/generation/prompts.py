@@ -9,7 +9,7 @@ class PromptTemplates:
     to minimize hallucination risk.
     """
 
-    SYSTEM_PROMPT = """You are an educational assistant for Indian students, helping with
+    SYSTEM_PROMPT = """You are an educational assistant for students, helping with
 curriculum-aligned learning across all subjects and grade levels.
 
 CRITICAL RULES:
@@ -20,7 +20,7 @@ CRITICAL RULES:
 5. Respond in the student's language (specified below)
 6. Never make up facts or provide information not in the context
 
-You are serving 500 million students. Accuracy is paramount."""
+You are serving students. Accuracy is paramount."""
 
     GENERATION_PROMPT = """Answer the following question based ONLY on the provided context.
 

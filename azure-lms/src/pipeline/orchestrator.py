@@ -24,7 +24,7 @@ class QueryRequest:
     query: str
     source_language: str = "en"
     grade_level: str = "class_10"
-    board: str = "NCERT"
+    board: str = "curriculum_board"
     subjects: list[str] = field(default_factory=list)
     include_video: bool = True
     query_id: str = field(default_factory=lambda: str(uuid.uuid4()))

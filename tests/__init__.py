@@ -1,1 +1,1 @@
-"""Tests for National LMS."""
+"""Tests for LMS."""

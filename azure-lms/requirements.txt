@@ -1,4 +1,4 @@
-# National LMS - Azure Implementation
+# LMS - Azure Implementation
 # Core Dependencies
 
 # Azure SDK

@@ -1,4 +1,4 @@
-"""Cloud provider implementations for National LMS."""
+"""Cloud provider implementations for LMS."""
 
 from src.cloud.common.interfaces import (
     CloudProvider,

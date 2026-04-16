@@ -1,6 +1,6 @@
-# National Learning Management System - GCP Implementation
+# Learning Management System - GCP Implementation
 
-Multi-modal RAG system for 500 million students across 15+ Indian languages, powered by Google Cloud AI services.
+Multi-modal RAG system across multiple regional languages, powered by Google Cloud AI services.
 
 ## Architecture
 

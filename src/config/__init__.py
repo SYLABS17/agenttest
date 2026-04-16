@@ -1,4 +1,4 @@
-"""Configuration module for National LMS."""
+"""Configuration module for LMS."""
 
 from src.config.settings import Settings, get_settings
 

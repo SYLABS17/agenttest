@@ -13,7 +13,7 @@ class UserContext:
     user_id: Optional[str] = None
     session_id: Optional[str] = None
     grade_level: str = "unknown"
-    board: str = "NCERT"
+    board: str = "curriculum_board"
     subjects: list[str] = field(default_factory=list)
     language: str = "en"
 

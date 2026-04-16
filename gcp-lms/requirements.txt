@@ -1,4 +1,4 @@
-# National LMS - GCP Implementation
+# LMS - GCP Implementation
 # Core Dependencies
 
 # Google Cloud SDK

@@ -12,7 +12,7 @@ logger = structlog.get_logger(__name__)
 
 class AcademicGlossary:
     """
-    Academic glossary mapping 10,000+ terms across 15 Indian languages.
+    Academic glossary mapping 10,000+ academic terms across multiple languages.
 
     Critical for preserving domain-specific terminology during translation.
     Example: 'ஒளிச்சேர்க்கை' (Tamil) → 'photosynthesis' (not literal translation)

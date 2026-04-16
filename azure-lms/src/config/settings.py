@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_name: str = "National LMS (Azure)"
+    app_name: str = "LMS (Azure)"
     app_version: str = "1.0.0"
     cloud_provider: Literal["azure"] = "azure"
     environment: Literal["development", "staging", "production"] = "development"

@@ -1,1 +1,1 @@
-"""Unit tests for National LMS components."""
+"""Unit tests for LMS components."""
