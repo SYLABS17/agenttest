@@ -1,6 +1,6 @@
-# Learning Management System - Azure Implementation
+# Learning Management System - Azure AI Foundry + Voice Live
 
-Multi-modal RAG system across multiple regional languages, powered by Azure AI services.
+Simplified LMS using Azure AI Foundry for RAG and Azure Voice Live for speech interactions.
 
 ## Architecture
 
@@ -9,37 +9,33 @@ Multi-modal RAG system across multiple regional languages, powered by Azure AI s
 │                        Microsoft Azure                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │ AKS          │───▶│ Azure AI     │───▶│ Azure AI Search      │  │
-│  │ (API Layer)  │    │ Agent Service│    │ (Hybrid Vector/BM25) │  │
-│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
-│         │                   │                      │               │
-│         │                   │                      │               │
-│         ▼                   ▼                      ▼               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │ Azure        │    │ Azure OpenAI │    │ Azure Blob Storage   │  │
-│  │ Translator   │    │ GPT-4o       │    │ (Content + Frames)   │  │
-│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
-│                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Application Insights + Azure Monitor                         │  │
+│  │                    Azure AI Foundry                          │  │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────────────────┐  │  │
+│  │  │ AI Agents  │──│ GPT-4o     │──│ Azure AI Search (RAG)  │  │  │
+│  │  └────────────┘  └────────────┘  └────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                              │                                      │
+│                              ▼                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                    Azure Voice Live                          │  │
+│  │  ┌────────────────┐  ┌─────────────────────────────────────┐ │  │
+│  │  │ Speech-to-Text │  │ Text-to-Speech (Neural Voices)     │ │  │
+│  │  └────────────────┘  └─────────────────────────────────────┘ │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Azure Services Used
+## Azure Services
 
 | Component | Azure Service |
 |-----------|---------------|
-| Vector Search | Azure AI Search (Hybrid) |
-| Embeddings | Azure OpenAI (text-embedding-ada-002) |
-| Translation | Azure Translator + Custom Glossary |
-| LLM | Azure OpenAI (GPT-4o / GPT-4o-mini) |
-| Video Processing | Azure Video Indexer |
-| Storage | Azure Blob Storage |
-| Compute | Azure Kubernetes Service (AKS) |
-| Monitoring | Application Insights |
+| AI Platform | Azure AI Foundry |
+| RAG Search | Azure AI Search |
+| LLM | GPT-4o |
+| Speech Recognition | Azure Speech (Voice Live) |
+| Text-to-Speech | Azure Neural Voices |
 
 ## Quick Start
 
@@ -52,41 +48,59 @@ cp .env.example .env
 # Edit .env with your Azure credentials
 
 # Run the API
-uvicorn src.api.app:app --reload
-
-# Run tests
-pytest tests/
+uvicorn azure_lms.src.api.app:app --reload
 ```
 
-## Key Metrics
+## API Endpoints
 
-- **Total Students**: 500 Million
-- **Daily Active Users**: 120 Million
-- **Languages Supported**: 15+
-- **P95 Latency**: < 3 seconds
-- **Cost Per Query**: $0.02
+### Query (RAG)
+```bash
+POST /api/v1/query
+{
+  "question": "What is photosynthesis?",
+  "language": "en"
+}
+```
+
+### Text-to-Speech
+```bash
+POST /api/v1/synthesize
+{
+  "text": "Hello, welcome to the learning system",
+  "language": "en"
+}
+```
+
+### Real-time Voice (WebSocket)
+```javascript
+ws://localhost:8000/ws/voice
+
+// Send: {"type": "recognize", "language": "en"}
+// Receive: {"type": "transcription", "text": "..."}
+
+// Send: {"type": "query", "text": "What is DNA?"}
+// Receive: {"type": "answer", "text": "..."}
+
+// Send: {"type": "speak", "text": "Hello", "language": "hi"}
+// Receive: <audio bytes>
+```
 
 ## Project Structure
 
 ```
 azure-lms/
 ├── src/
-│   ├── config/          # Azure-specific configuration
-│   ├── glossary/        # Academic glossary (10,000+ terms)
-│   ├── translation/     # Azure Translator integration
-│   ├── chunking/        # Document chunking
-│   ├── search/          # Azure AI Search integration
-│   ├── reranking/       # Cross-encoder reranking
-│   ├── video/           # Azure Video Indexer
-│   ├── generation/      # Azure OpenAI generation
-│   ├── evaluation/      # Quality framework
-│   ├── pipeline/        # Main orchestrator
-│   └── api/             # FastAPI application
-├── tests/
-├── data/glossary/
+│   ├── config/      # Settings
+│   ├── foundry/     # Azure AI Foundry client
+│   ├── voice/       # Azure Voice Live
+│   └── api/         # FastAPI application
 ├── requirements.txt
 └── README.md
 ```
+
+## Supported Languages
+
+English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada, Malayalam, Punjabi, Odia, Assamese, Urdu
 
 ## License
 

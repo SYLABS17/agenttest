@@ -1,5 +1,5 @@
-"""Azure LMS API."""
+"""LMS API with Azure AI Foundry and Voice Live."""
 
-from src.api.app import create_app, app
+from azure_lms.src.api.app import app
 
-__all__ = ["create_app", "app"]
+__all__ = ["app"]
