@@ -1,271 +1,133 @@
-"""FastAPI application for LMS API."""
+"""FastAPI application for LMS with Azure AI Foundry and Voice Live."""
 
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 import structlog
 
-from src.config import get_settings
-from src.pipeline import LMSPipeline, QueryRequest, QueryResponse
-from src.pipeline.models import UserContext
+from src.config.settings import get_settings
+from src.foundry.client import AzureAIFoundryClient
+from src.voice.speech import AzureVoiceLive
 
 logger = structlog.get_logger(__name__)
+settings = get_settings()
 
-# Global pipeline instance
-_pipeline: Optional[LMSPipeline] = None
+_foundry: Optional[AzureAIFoundryClient] = None
+_voice: Optional[AzureVoiceLive] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
-    global _pipeline
-    logger.info("starting_application")
-    _pipeline = LMSPipeline()
+    """Initialize and cleanup resources."""
+    global _foundry, _voice
+
+    logger.info("initializing_services")
+    _foundry = AzureAIFoundryClient(
+        project_connection_string=settings.azure_ai_project_connection_string,
+        search_index=settings.azure_search_index_name,
+        chat_model=settings.chat_model,
+    )
+    await _foundry.initialize()
+
+    _voice = AzureVoiceLive(
+        speech_key=settings.azure_speech_key,
+        speech_region=settings.azure_speech_region,
+    )
+
     yield
-    logger.info("shutting_down_application")
+
+    if _foundry:
+        await _foundry.close()
 
 
-def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
-    settings = get_settings()
+app = FastAPI(
+    title="LMS API",
+    description="Learning Management System with Azure AI Foundry and Voice Live",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
-    app = FastAPI(
-        title="LMS API",
-        description="Multi-modal RAG API serving students across multiple regional languages",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Configure properly for production
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Register routes
-    app.include_router(query_router)
-    app.include_router(health_router)
-    app.include_router(feedback_router)
-
-    return app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-# Request/Response Models
-class QueryRequestModel(BaseModel):
-    """API request model for queries."""
-
-    query: str = Field(..., min_length=1, max_length=2000, description="The question to answer")
-    language: str = Field(default="en", description="Source language code (e.g., 'hi', 'ta', 'en')")
-    grade_level: str = Field(default="class_10", description="Student grade level")
-    board: str = Field(default="curriculum board", description="Education board")
-    subjects: list[str] = Field(default=[], description="Relevant subjects")
-    include_video: bool = Field(default=True, description="Include video segment references")
-    max_chunks: int = Field(default=7, ge=1, le=20, description="Maximum context chunks")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "query": "What is photosynthesis?",
-                "language": "hi",
-                "grade_level": "class_10",
-                "board": "curriculum_board",
-                "subjects": ["biology"],
-                "include_video": True,
-            }
-        }
+class QueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    language: str = Field(default="en")
 
 
-class QueryResponseModel(BaseModel):
-    """API response model for queries."""
-
-    query_id: str
+class QueryResponse(BaseModel):
     answer: str
-    language: str
     sources: list[dict]
-    video_segments: list[dict]
     confidence: float
-    metadata: dict
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "query_id": "abc123",
-                "answer": "Photosynthesis is the process...",
-                "language": "hi",
-                "sources": [
-                    {
-                        "source_type": "textbook",
-                        "board": "curriculum_board",
-                        "subject": "biology",
-                        "chapter": "Life Processes",
-                    }
-                ],
-                "video_segments": [],
-                "confidence": 0.85,
-                "metadata": {
-                    "latency_ms": 1500,
-                    "grounded": True,
-                },
-            }
-        }
 
 
-class FeedbackRequest(BaseModel):
-    """User feedback request."""
-
-    query_id: str = Field(..., description="Query ID to provide feedback for")
-    feedback: str = Field(..., pattern="^(positive|negative)$", description="Feedback type")
+class SpeechRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=5000)
+    language: str = Field(default="en")
 
 
-class HealthResponse(BaseModel):
-    """Health check response."""
-
-    status: str
-    components: dict
-    metrics: dict
+@app.get("/health")
+async def health():
+    return {"status": "healthy" if _foundry else "unhealthy"}
 
 
-# Routers
-from fastapi import APIRouter
+@app.post("/api/v1/query", response_model=QueryResponse)
+async def query(request: QueryRequest):
+    """Query using Azure AI Foundry RAG."""
+    if not _foundry:
+        raise HTTPException(status_code=503, detail="Not initialized")
 
-query_router = APIRouter(prefix="/api/v1", tags=["queries"])
-health_router = APIRouter(prefix="/health", tags=["health"])
-feedback_router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
+    result = await _foundry.query(request.question, request.language)
+    return QueryResponse(answer=result.answer, sources=result.sources, confidence=result.confidence)
 
 
-@query_router.post("/query", response_model=QueryResponseModel)
-async def answer_query(request: QueryRequestModel):
-    """
-    Answer a student's educational query.
+@app.post("/api/v1/synthesize")
+async def synthesize(request: SpeechRequest):
+    """Text-to-speech using Azure Voice Live."""
+    if not _voice:
+        raise HTTPException(status_code=503, detail="Not initialized")
 
-    Processes the query through:
-    - Translation (if non-English)
-    - Hybrid search across curriculum content
-    - Reranking for relevance
-    - Grounded response generation
+    audio = await _voice.synthesize_speech(request.text, request.language)
+    if not audio:
+        raise HTTPException(status_code=500, detail="Synthesis failed")
 
-    Returns curriculum-aligned answer with source citations.
-    """
-    if _pipeline is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Pipeline not initialized",
-        )
+    return Response(content=audio, media_type="audio/wav")
+
+
+@app.websocket("/ws/voice")
+async def voice_ws(websocket: WebSocket):
+    """Real-time voice WebSocket."""
+    await websocket.accept()
+
+    if not _voice or not _foundry:
+        await websocket.close(code=1011)
+        return
 
     try:
-        # Build pipeline request
-        pipeline_request = QueryRequest(
-            query=request.query,
-            source_language=request.language,
-            user_context=UserContext(
-                grade_level=request.grade_level,
-                board=request.board,
-                subjects=request.subjects,
-                language=request.language,
-            ),
-            include_video=request.include_video,
-            max_chunks=request.max_chunks,
-        )
+        while True:
+            data = await websocket.receive_json()
 
-        # Process query
-        response = await _pipeline.answer_query(pipeline_request)
+            if data.get("type") == "recognize":
+                result = await _voice.recognize_once(data.get("language", "en"))
+                await websocket.send_json({"type": "transcription", "text": result.text})
 
-        return QueryResponseModel(
-            query_id=response.query_id,
-            answer=response.answer,
-            language=response.language,
-            sources=[
-                {
-                    "source_type": s.source_type,
-                    "board": s.board,
-                    "subject": s.subject,
-                    "grade_level": s.grade_level,
-                    "chapter": s.chapter,
-                    "page_number": s.page_number,
-                }
-                for s in response.sources
-            ],
-            video_segments=[
-                {
-                    "video_id": v.video_id,
-                    "title": v.title,
-                    "instructor": v.instructor,
-                    "segment": f"{v.start_timestamp} - {v.end_timestamp}",
-                    "url": v.url,
-                }
-                for v in response.video_segments
-            ],
-            confidence=response.confidence,
-            metadata={
-                "route_used": response.route_used,
-                "translation_confidence": response.translation_confidence,
-                "grounded": response.grounded,
-                "latency_ms": response.latency_ms,
-                "tokens_used": response.tokens_used,
-            },
-        )
+            elif data.get("type") == "query":
+                result = await _foundry.query(data.get("text", ""), data.get("language", "en"))
+                await websocket.send_json({"type": "answer", "text": result.answer})
 
-    except Exception as e:
-        logger.error("query_failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query processing failed: {str(e)}",
-        )
+            elif data.get("type") == "speak":
+                audio = await _voice.synthesize_speech(data.get("text", ""), data.get("language", "en"))
+                await websocket.send_bytes(audio)
 
-
-@feedback_router.post("/")
-async def submit_feedback(request: FeedbackRequest):
-    """Submit user feedback for a query."""
-    if _pipeline is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Pipeline not initialized",
-        )
-
-    await _pipeline.record_feedback(request.query_id, request.feedback)
-    return {"status": "recorded", "query_id": request.query_id}
-
-
-@health_router.get("/", response_model=HealthResponse)
-async def health_check():
-    """Check health status of all components."""
-    if _pipeline is None:
-        return HealthResponse(
-            status="unhealthy",
-            components={},
-            metrics={},
-        )
-
-    health = _pipeline.get_health_status()
-    return HealthResponse(
-        status=health["status"],
-        components=health["components"],
-        metrics=health["metrics"],
-    )
-
-
-@health_router.get("/ready")
-async def readiness_check():
-    """Check if service is ready to accept requests."""
-    if _pipeline is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service not ready",
-        )
-    return {"ready": True}
-
-
-@health_router.get("/live")
-async def liveness_check():
-    """Check if service is alive."""
-    return {"alive": True}
-
-
-# Create default app instance
-app = create_app()
+    except WebSocketDisconnect:
+        pass

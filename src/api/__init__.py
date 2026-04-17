@@ -1,5 +1,4 @@
-"""FastAPI application for LMS."""
+"""LMS API."""
+from src.api.app import app
 
-from src.api.app import create_app
-
-__all__ = ["create_app"]
+__all__ = ["app"]

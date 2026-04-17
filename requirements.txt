@@ -1,55 +1,32 @@
-# LMS - Multi-modal RAG System
-# Core Dependencies
+# LMS - Azure AI Foundry + Voice Live
 
-# Azure SDK
-azure-ai-search-documents>=11.4.0
-azure-ai-translation-text>=1.0.0
-azure-ai-documentintelligence>=1.0.0
-azure-storage-blob>=12.19.0
+# Azure AI Foundry
+azure-ai-projects>=1.0.0b1
+azure-ai-inference>=1.0.0b1
 azure-identity>=1.15.0
 
-# OpenAI / Azure OpenAI
-openai>=1.12.0
+# Azure AI Search (for RAG)
+azure-search-documents>=11.4.0
 
-# Embeddings and Reranking
-sentence-transformers>=2.3.0
-torch>=2.1.0
-
-# Vector Operations
-numpy>=1.24.0
-faiss-cpu>=1.7.4
+# Azure Speech (Voice Live)
+azure-cognitiveservices-speech>=1.35.0
 
 # Web Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+websockets>=12.0
 
 # Async Support
 aiohttp>=3.9.0
-httpx>=0.26.0
 
-# Data Processing
-pandas>=2.1.0
-python-multipart>=0.0.6
-
-# Video Processing
-moviepy>=1.0.3
-pydub>=0.25.1
-
-# Monitoring and Logging
+# Monitoring
 structlog>=24.1.0
-prometheus-client>=0.19.0
-opentelemetry-api>=1.22.0
-opentelemetry-sdk>=1.22.0
-opentelemetry-instrumentation-fastapi>=0.43b0
 
 # Testing
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
-pytest-cov>=4.1.0
 
 # Utilities
 python-dotenv>=1.0.0
-tenacity>=8.2.0
-cachetools>=5.3.0
